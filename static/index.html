@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatterbot - PraDigi</title>
+    <style>
+        body {
+            /* font-family: 'Comic Sans MS', cursive, sans-serif; */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f8ff;
+        }
+        .container {
+            text-align: center;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #4a4a4a;
+        }
+        #recordButton {
+            font-size: 1.5rem;
+            padding: 1rem 2rem;
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 2rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #recordButton:hover {
+            background-color: #ff8787;
+        }
+        #response {
+            margin-top: 2rem;
+            font-size: 1.2rem;
+            color: #4a4a4a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🎤 English Chatterbot powered by PraDigi Team 🗣️</h2>
+        <button id="recordButton">Start Talking</button>
+        <div id="response"></div>
+    </div>
+
+    <script>
+        const recordButton = document.getElementById('recordButton');
+        const responseDiv = document.getElementById('response');
+        let isRecording = false;
+        let socket;
+        let mediaRecorder;
+        let audioChunks = [];
+
+        recordButton.addEventListener('click', toggleRecording);
+
+        function toggleRecording() {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+
+        async function startRecording() {
+            isRecording = true;
+            recordButton.textContent = 'Stop Talking';
+            recordButton.style.backgroundColor = '#4CAF50';
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = sendAudioToServer;
+            
+            mediaRecorder.start();
+            
+            socket = new WebSocket('ws://localhost:8000/ws');
+            socket.onmessage = handleServerResponse;
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            recordButton.textContent = 'Start Talking';
+            recordButton.style.backgroundColor = '#ff6b6b';
+            
+            mediaRecorder.stop();
+        }
+
+        function sendAudioToServer() {
+            const audioBlob = new Blob(audioChunks);
+            const reader = new FileReader();
+            reader.readAsDataURL(audioBlob);
+            reader.onloadend = () => {
+                const base64Audio = reader.result.split(',')[1];
+                socket.send(base64Audio);
+            };
+            audioChunks = [];
+        }
+
+        function handleServerResponse(event) {
+            const data = JSON.parse(event.data);
+            responseDiv.textContent = data.text;
+            
+            // Play audio response
+            const audio = new Audio(`data:audio/wav;base64,${data.audio}`);
+            audio.play();
+        }
+    </script>
+</body>
+</html>
